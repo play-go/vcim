@@ -1,31 +1,46 @@
 # Made by KaBoT. Discord: @kabot
-# This project is licensed under the Apache 2.0 license
+# This project/code is licensed under the Apache 2.0 license
 
-# ROADMAP: Сборка из исходников
-import requests, tempfile, zipfile, typer, shutil, json, subprocess, re
+import requests, tempfile, zipfile, shutil, json, subprocess, re, os
 from pathlib import Path
 from sqlitedict import SqliteDict
+import typer
 from rich import print
 from rich.progress import track
 from typing import Annotated, Literal
 from enum import Enum
 import platform as pl
 
+# Сюда можно поместить свой путь до папки с нужным содержимым. Пример "путь/до/папок"
+CONFIGURED_PATH = False
+
+
+if CONFIGURED_PATH:
+    os.chdir(CONFIGURED_PATH)
+
+if Path("vcim.db").exists():
+    db = SqliteDict("vcim.db", autocommit=True)
+    os.chdir(db["dir"])
+else:
+    db = None
+
+
 app = typer.Typer(
     help="**VoxelCore Instances Manager (VCIM)** - проект призванный **стандартизировать** подход к разработке лаунчеров, а также **упростить** их разработку",
     no_args_is_help=True,
     rich_markup_mode="markdown",
 )
-if Path("vcim.db").exists():
-    db = SqliteDict("vcim.db", autocommit=True)
-else:
-    db = None
 
 instances = typer.Typer(no_args_is_help=True, rich_markup_mode="markdown")
 app.add_typer(instances, name="instances", help="Категория комманд для истансов")
 
 cache = typer.Typer(no_args_is_help=True, rich_markup_mode="markdown")
 app.add_typer(cache, name="cache", help="Категория комманд для управления кэш-ем")
+
+repo = typer.Typer(no_args_is_help=True, rich_markup_mode="markdown")
+app.add_typer(
+    repo, name="repo", help="Категория комманд для управления репозиториями GitHub"
+)
 
 
 def process_handler(process: subprocess.Popen):
@@ -141,6 +156,7 @@ def init(
         print("Создаю дб файл...", end=" ")
         db = SqliteDict("vcim.db", autocommit=True)
         print("✅")
+        db["dir"] = Path("").resolve()
         print("Создаю необходимые папки... ", end=" ")
         Path("instances").mkdir(mode=0o777, exist_ok=True)
         print("✅", end=" ")
@@ -159,7 +175,54 @@ def init(
         print("В этой папке vcim уже инициирован")
 
 
-@app.command(short_help="Синхронизация версий с гитхаб репозиториями")
+@repo.command(name="recovery")
+def reporecovery():
+    """
+    Восстановить стандартные ссылки на репозитории
+    """
+    init_checker()
+    db["repos"] = ["https://api.github.com/repos/MihailRis/VoxelEngine-Cpp/releases"]
+    print(":white_check_mark: Восстановлено!")
+
+
+@repo.command(name="list")
+def rlist():
+    """
+    Выдать все ссылки находящиеся в датабазе
+    """
+    init_checker()
+    for i in range(len(db["repos"])):
+        print(f"{i}. {db["repos"][i]}")
+
+
+@repo.command(name="add")
+def repoadd(link: str):
+    """
+    Добавить ссылку на репозиторий GitHub откуда собирать версии (валидации пока нет)
+    """
+    init_checker()
+    reps: list = db["repos"]
+    reps.append(link)
+    db["repos"] = reps
+
+
+@repo.command(name="remove")
+def reporemove(number: int):
+    """
+    Удалить ссылку из датабазы
+    """
+    init_checker()
+    try:
+        reps: list = db["repos"]
+        reps.pop(number)
+        db["repos"] = reps
+        print(":wastebasket: Ссылка удалена")
+    except IndexError:
+        print(":x: Не удалось найти ссылку под этим номером")
+
+
+@app.command(name="sync", short_help="Синхронизация версий с гитхаб репозиториями")
+@repo.command(name="sync", short_help="Синхронизация версий с гитхаб репозиториями")
 def gitupdate():
     """
     Синхронизация версий с гитхаб репозиториями
@@ -167,21 +230,25 @@ def gitupdate():
     init_checker()
     versions = {}
     for repo in db["repos"]:  # На данный момент в синхроне т.к лень
-        req = requests.get(
-            repo,
-            headers={
-                "Content-Type": "application/vnd.github+json",
-            },
-        )
-        if req.ok:
-            for i in track(req.json(), description=f"- {repo}"):
-                versions[i["name"].replace("v", "")] = {
-                    "assets": asset_worker(i["assets"]),
-                }
-        else:
-            print(
-                f":x: Ошибка при попытке синхронизироваться c {req.url} ({req.status_code})"
+        try:
+            req = requests.get(
+                repo,
+                headers={
+                    "Content-Type": "application/vnd.github+json",
+                },
             )
+            if req.ok:
+                for i in track(req.json(), description=f"- {repo}"):
+                    versions[i["name"].replace("v", "")] = {
+                        "assets": asset_worker(i["assets"]),
+                    }
+            else:
+                print(
+                    f":x: Ошибка при попытке синхронизироваться c {req.url} ({req.status_code})"
+                )
+                raise typer.Exit(code=2)
+        except:
+            print(f":x: Ошибка при попытке синхронизироваться c {repo}")
             raise typer.Exit(code=2)
     db["versions"] = versions
     print(f"Синхронизированно {len(versions.keys())} версий!")
@@ -443,7 +510,7 @@ def info(
 
 
 @instances.command(short_help="Вывести короткие данные о всех инстансах")
-def list(asjson: bool = False):
+def ilist(asjson: bool = False):
     """
     Вывести короткие данные о всех инстансах
 

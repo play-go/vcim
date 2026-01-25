@@ -1,0 +1,3 @@
+sqlitedict
+typer
+requests
