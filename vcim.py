@@ -21,10 +21,10 @@ if Path("vcim.db").exists():
 else:
     db = None
 
-instances = typer.Typer()
+instances = typer.Typer(no_args_is_help=True, rich_markup_mode="markdown")
 app.add_typer(instances, name="instances", help="Категория комманд для истансов")
 
-cache = typer.Typer()
+cache = typer.Typer(no_args_is_help=True, rich_markup_mode="markdown")
 app.add_typer(cache, name="cache", help="Категория комманд для управления кэш-ем")
 
 
