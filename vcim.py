@@ -400,7 +400,6 @@ def run(
             raise typer.Exit(2)
         match db["platform"] if platform == None else platform:
             case "windows":
-                old_cwd = os.getcwd()
                 os.chdir(path)
                 process = subprocess.Popen(
                     [
@@ -415,7 +414,6 @@ def run(
                     text=True,
                     bufsize=1,
                 )
-                # os.chdir(old_cwd)
             case "linux":
 
                 subprocess.run(
