@@ -11,6 +11,8 @@ from typing import Annotated, Literal
 from enum import Enum
 import platform as pl
 
+import os
+
 # Сюда можно поместить свой путь до папки с нужным содержимым. Пример "путь/до/папок"
 CONFIGURED_PATH = False
 
@@ -398,6 +400,7 @@ def run(
             raise typer.Exit(2)
         match db["platform"] if platform == None else platform:
             case "windows":
+                os.chdir(path)
                 process = subprocess.Popen(
                     [
                         f"{path}/{data["exec_file"]}",
@@ -407,7 +410,7 @@ def run(
                     ],
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
-                    encoding="cp1251",
+                    encoding="utf-8",
                     text=True,
                     bufsize=1,
                 )
