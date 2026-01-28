@@ -422,7 +422,7 @@ def install(
                     "version": version,
                     "name": name if custom_name == None else custom_name,
                     "timeplayed": 0,
-                    "exec_file": execfile,
+                    "executable_file": execfile,
                     "group": group if group != None else "",
                     "args": "",
                     "description": "",
