@@ -573,7 +573,7 @@ def info(
                 json.dumps(
                     {
                         "name": data["name"],
-                        "vcim_name": name,
+                        "name_vcim": name,
                         "path": str(Path(f"instances/{name}").resolve()),
                         "group": data["group"],
                         "version": data["version"],
