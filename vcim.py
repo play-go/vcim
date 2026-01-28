@@ -211,7 +211,7 @@ def verlist(asjson: bool = False):
     """
     init_checker()
     if asjson:
-        print(list(db["versions"].keys()))
+        print(json.dumps(list(db["versions"].keys())))
     else:
         print(", ".join(db["versions"]))
 
