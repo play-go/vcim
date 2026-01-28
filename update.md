@@ -1,0 +1,9 @@
+- исправлена ошибка двойного импорта os
+- в help у некоторых комманд появились коды ошибок
+- instances run теперь измеряет время игры и записывает в launcher.json
+- instances run получил параметр sendjson
+- добавление repo versions
+- исправлена ошибка в instances info
+- добавлен прогресс бар в instances install
+- обновлён прогресс бар в repo sync
+- в instances info при --asjson убрано форматирование timestamp

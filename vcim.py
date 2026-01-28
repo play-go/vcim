@@ -1,17 +1,24 @@
 # Made by KaBoT. Discord: @kabot
 # This project/code is licensed under the Apache 2.0 license
 
-import requests, tempfile, zipfile, shutil, json, subprocess, re, os
+import requests, tempfile, zipfile, shutil, json, subprocess, re, os, time
 from pathlib import Path
 from sqlitedict import SqliteDict
 import typer
 from rich import print
-from rich.progress import track
+from rich.progress import (
+    track,
+    Progress,
+    DownloadColumn,
+    TransferSpeedColumn,
+    TimeRemainingColumn,
+    TextColumn,
+    BarColumn,
+    SpinnerColumn,
+)
 from typing import Annotated, Literal
 from enum import Enum
 import platform as pl
-
-import os
 
 # Сюда можно поместить свой путь до папки с нужным содержимым. Пример "путь/до/папок"
 CONFIGURED_PATH = False
@@ -197,6 +204,18 @@ def rlist():
         print(f"{i}. {db["repos"][i]}")
 
 
+@repo.command(name="versions")
+def verlist(asjson: bool = False):
+    """
+    Версии VoxelCore находящиеся в ДБ и которые можно скачать
+    """
+    init_checker()
+    if asjson:
+        print(list(db["versions"].keys()))
+    else:
+        print(", ".join(db["versions"]))
+
+
 @repo.command(name="add")
 def repoadd(link: str):
     """
@@ -212,6 +231,9 @@ def repoadd(link: str):
 def reporemove(number: int):
     """
     Удалить ссылку из датабазы
+
+    Коды ошибок:
+    - 1 (Не удалось найти ссылку)
     """
     init_checker()
     try:
@@ -221,6 +243,7 @@ def reporemove(number: int):
         print(":wastebasket: Ссылка удалена")
     except IndexError:
         print(":x: Не удалось найти ссылку под этим номером")
+        raise typer.Exit(code=1)
 
 
 @app.command(name="sync", short_help="Синхронизация версий с гитхаб репозиториями")
@@ -228,30 +251,46 @@ def reporemove(number: int):
 def gitupdate():
     """
     Синхронизация версий с гитхаб репозиториями
+
+    Коды ошибок:
+    - 1 (Ошибка во время синхронизации и соединение не установлено)
+    - 2 (Ошибка во время синхронизации, но соединение установлено)
     """
     init_checker()
     versions = {}
-    for repo in db["repos"]:  # На данный момент в синхроне т.к лень
-        try:
-            req = requests.get(
-                repo,
-                headers={
-                    "Content-Type": "application/vnd.github+json",
-                },
-            )
-            if req.ok:
-                for i in track(req.json(), description=f"- {repo}"):
-                    versions[i["name"].replace("v", "")] = {
-                        "assets": asset_worker(i["assets"]),
-                    }
-            else:
-                print(
-                    f":x: Ошибка при попытке синхронизироваться c {req.url} ({req.status_code})"
+    with Progress(
+        SpinnerColumn(spinner_name="boxBounce"),
+        TextColumn("[progress.description]{task.description}"),
+    ) as progress:
+        for repo in db["repos"]:
+
+            task_id = progress.add_task(f"[cyan]{repo}")
+            try:
+                req = requests.get(
+                    repo,
+                    headers={
+                        "Content-Type": "application/vnd.github+json",
+                    },
                 )
-                raise typer.Exit(code=2)
-        except:
-            print(f":x: Ошибка при попытке синхронизироваться c {repo}")
-            raise typer.Exit(code=2)
+                if req.ok:
+
+                    for i in req.json():
+                        versions[i["name"].replace("v", "")] = {
+                            "assets": asset_worker(i["assets"]),
+                        }
+                    progress.update(
+                        task_id, description=f"[green]{repo}", completed=True
+                    )
+                else:
+                    progress.update(task_id, description=f"[red]{repo}")
+                    print(
+                        f":x: Ошибка во время синхронизации c {req.url} ({req.status_code})"
+                    )
+                    raise typer.Exit(code=2)
+            except Exception as e:
+                progress.update(task_id, description=f"[red]{repo}")
+                print(f":x: Ошибка во время синхронизации c {repo} ({e})")
+                raise typer.Exit(code=1)
     db["versions"] = versions
     print(f"Синхронизированно {len(versions.keys())} версий!")
 
@@ -285,6 +324,10 @@ def install(
     --group (text)  добавляет инстанс в группу
 
     --platform (windows | linux | macos)  скачивает определённую к платформе версию для инстанса
+
+    Коды ошибок:
+    - 1 (Версия не доступна)
+    - 2 (Инстанс уже существует)
     """
     init_checker()
     versions = db["versions"]
@@ -293,7 +336,7 @@ def install(
         item.name.lower() for item in Path("instances").iterdir() if item.is_dir()
     ]:
         print(":x: Такой инстанс уже существует!")
-        raise typer.Exit(code=3)
+        raise typer.Exit(code=2)
     if version in versions.keys():
         if f"{platform}_{version}" in [
             item.name for item in Path("cache").iterdir() if item.is_dir()
@@ -318,13 +361,35 @@ def install(
                 response = requests.get(
                     versions[version]["assets"][platform], stream=True
                 )
-                if response.status_code == 200:
-                    print("Соединение установлено! Скачиваю версию")
-                    for chunk in response.iter_content(chunk_size=1024):
-                        temp_file.write(chunk)
-                else:
-                    print(f":x: Не удалось установить версию из интернета!")
-                    raise typer.Exit(code=response.status_code)
+                with Progress(
+                    TextColumn("[bold blue]{task.description}", justify="right"),
+                    BarColumn(bar_width=None),
+                    "[progress.percentage]{task.percentage:>1.1f}%",
+                    DownloadColumn(),
+                    TransferSpeedColumn(),
+                    TimeRemainingColumn(),
+                    speed_estimate_period=1,
+                ) as progress:
+                    total_size = int(response.headers.get("content-length", 0))
+                    task_id = progress.add_task(f"[cyan]{version}", total=total_size)
+                    if response.status_code == 200:
+                        print("Соединение установлено! Скачиваю версию")
+                        for chunk in response.iter_content(chunk_size=8192):
+                            temp_file.write(chunk)
+                            progress.update(task_id, advance=len(chunk))
+                    else:
+                        progress.update(
+                            task_id,
+                            completed=total_size,
+                            description=f"[red]{version}",
+                        )
+                        print(f":x: Не удалось установить версию из интернета!")
+                        raise typer.Exit(code=response.status_code)
+                    progress.update(
+                        task_id,
+                        completed=total_size,
+                        description=f"[green]{version}",
+                    )
                 temp_file_path = temp_file.name
             print("Версия скачалась. Добавляю в cache")
             version_folder = Path(f"cache/{platform}_{version}")
@@ -384,23 +449,33 @@ def run(
     platform: Annotated[
         Literal["windows", "linux", "macos"], typer.Option(case_sensitive=False)
     ] = None,
+    sendjson: bool = False,
 ):
     """
     Запуск инстанса с названием папки NAME (регистр учитывается)
 
     --platform (windows | linux | macos)  если нужно запустить не стандартную версию для вашей операционной системы
+
+    --sendjson  отправляет новые данные из launcher.json после закрытия приложения
+
+    Коды ошибок:
+    - 1 (Инстанс не существует)
+    - 2 (Не надйен файл который нужно запустить)
+    - 3 (Запуск игры на макос, пока что не поддерживается)
     """
     init_checker()
     if name in [item.name for item in Path("instances").iterdir() if item.is_dir()]:
         with open(f"instances/{name}/launcher.json", "r", encoding="utf-8") as file:
             data = json.load(file)
+        oldpath = Path().resolve()
         path = Path(f"instances/{name}").resolve()
         if data["exec_file"] == "":
             print(":x: exec_file пуст. Нечего запускать")
             raise typer.Exit(2)
+        os.chdir(path)
+        ftime = round(time.time())
         match db["platform"] if platform == None else platform:
             case "windows":
-                os.chdir(path)
                 process = subprocess.Popen(
                     [
                         f"{path}/{data["exec_file"]}",
@@ -437,6 +512,21 @@ def run(
                 )
                 raise typer.Exit(3)
         process_handler(process)
+        plustime = int(round(time.time())) - ftime
+        os.chdir(oldpath)
+        with open(f"instances/{name}/launcher.json", "r", encoding="utf-8") as file:
+            data = json.load(file)
+        with open(f"instances/{name}/launcher.json", "w", encoding="utf-8") as file:
+            data["timeplayed"] += plustime
+            json.dump(
+                data,
+                file,
+                ensure_ascii=False,
+                indent=4,
+            )
+        print(f"Сыгранное время: {format_seconds(plustime)}")
+        if sendjson:
+            print(json.dumps(data))
     else:
         print(":x: Такого инстанса не существует! (регистр учитывается)")
         raise typer.Exit(code=1)
@@ -446,6 +536,9 @@ def run(
 def remove(name: Annotated[str, typer.Option(prompt="Имя инстанса")] | str):
     """
     Удалить инстанс с названием папки NAME (регистр учитывается)
+
+    Коды ошибок:
+    - 1 (Инстанс не существует)
     """
     init_checker()
     if name in [item.name for item in Path("instances").iterdir() if item.is_dir()]:
@@ -468,6 +561,8 @@ def info(
 
     --asjson для вывода данных в json
 
+    Коды ошибок:
+    - 1 (Инстанс не существует)
     """
     init_checker()
     if name in [item.name for item in Path("instances").iterdir() if item.is_dir()]:
@@ -479,13 +574,13 @@ def info(
                     {
                         "name": data["name"],
                         "vcim_name": name,
-                        "path": Path(f"instances/{name}").resolve(),
+                        "path": str(Path(f"instances/{name}").resolve()),
                         "group": data["group"],
                         "version": data["version"],
                         "executable_file": data["exec_file"],
                         "args": data["args"],
                         "description": data["description"],
-                        "timeplayed": format_seconds(data["timeplayed"]),
+                        "timeplayed": data["timeplayed"],
                     },
                     ensure_ascii=False,
                     indent=4,
