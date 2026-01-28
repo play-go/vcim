@@ -631,7 +631,7 @@ def ilist(asjson: bool = False):
                 }
             )
     if asjson:
-        print(res)
+        print(json.dumps(res))
     else:
         for i in res:
             print(f"• [bold]{i["name"]} ({i["name_vcim"]})[/bold]")
