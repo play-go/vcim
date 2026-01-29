@@ -671,12 +671,46 @@ def clear_cache(
     ],
 ):
     """
-    Очистить весь кэш (т.е удалить папку cahce)
+    Очистить весь кэш (т.е удалить папку cache)
     """
     init_checker()
     if confirm:
         shutil.rmtree(Path("cache/"))
         print(":wastebasket: Весь кэш удалён!")
+
+
+@cache.command(name="list")
+def cache_list(asjson: bool = False):
+    """
+    Версии игры находящиеся в кэш-е
+
+    --asjson для вывода данных в json
+    """
+    res = []
+    for item in Path("cache").iterdir():
+        if item.is_dir():
+            res.append(item.name)
+    if asjson:
+        print(json.dumps(res))
+    else:
+        print(", ".join(res))
+
+
+@cache.command(name="remove")
+def cache_remove(name: str):
+    """
+    Версии игры находящиеся в кэш-е
+
+    Коды ошибок:
+
+    - 1 (версия не найдена)
+    """
+    if name in [item.name for item in Path("cache").iterdir() if item.is_dir()]:
+        shutil.rmtree(Path(f"cache/{name}"))
+        print(f":white_check_mark: Версия {name} удалёна из кэш-а!")
+    else:
+        print(":x: Версия не найдена в кэш!")
+        raise typer.Exit(code=1)
 
 
 if __name__ == "__main__":
