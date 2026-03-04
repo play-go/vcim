@@ -478,7 +478,7 @@ def run(
             data = json.load(file)
         oldpath = Path().resolve()
         path = str(Path(f"instances/{name}").resolve())
-        if data["exec_file"] == "":
+        if data["executable_file"] == "":
             print(":x: exec_file пуст. Нечего запускать")
             raise typer.Exit(2)
         os.chdir(path)
@@ -487,7 +487,7 @@ def run(
             case "windows":
                 process = subprocess.Popen(
                     [
-                        f"{path}/{data["exec_file"]}",
+                        f"{path}/{data["executable_file"]}",
                         "--dir",
                         path,
                         *(data["args"].split()),
@@ -501,11 +501,11 @@ def run(
             case "linux":
 
                 subprocess.run(
-                    ["chmod", "+x", f"{path}/{data["exec_file"]}"],
+                    ["chmod", "+x", f"{path}/{data["executable_file"]}"],
                 )
                 process = subprocess.Popen(
                     [
-                        f"{path}/{data["exec_file"]}",
+                        f"{path}/{data["executable_file"]}",
                         "--dir",
                         path,
                         *(data["args"].split()),
@@ -586,7 +586,7 @@ def info(
                         "path": str(Path(f"instances/{name}").resolve()),
                         "group": data["group"],
                         "version": data["version"],
-                        "executable_file": data["exec_file"],
+                        "executable_file": data["executable_file"],
                         "args": data["args"],
                         "description": data["description"],
                         "timeplayed": data["timeplayed"],
@@ -599,7 +599,7 @@ def info(
             print(f"Название (для лаунчеров): {data['name']}")
             print(f"Название (для vcim): {name}")
             print(f"Версия voxelcore: {data["version"]}")
-            print(f"Файл запуска: {data["exec_file"]}")
+            print(f"Файл запуска: {data["executable_file"]}")
             print(
                 f"Параметры запуска: {data["args"] if data["args"] != "" else "[italic]Пусто[/italic]"}"
             )
