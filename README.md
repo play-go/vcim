@@ -37,9 +37,15 @@ python vcim.py [OPTIONS] COMMAND [ARGS]...
 python vcim.py --help
 ```
 
+# Сборка проекта
+
+```
+nuitka --onefile --follow-imports --include-package=rich --include-module=rich._unicode_data --nofollow-import-to=cryptography --python-flag=no_site vcim.py
+```
+Сборка через pyinstaller не желательна, т.к скорость оставляет желать лучшего
+
 # Roadmap
 
-* Собранные исходники
 * Документация
 * Команда build чтобы билдить VoxelCore
 * Команда watch чтобы смотреть за изменениями в папках и выводом в консоль изменений в json

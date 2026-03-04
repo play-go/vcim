@@ -1,7 +1,9 @@
 # Made by KaBoT. Discord: @kabot
 # This project/code is licensed under the Apache 2.0 license
 
-import requests, tempfile, zipfile, shutil, json, subprocess, re, os, time
+import requests, tempfile, zipfile, shutil, json, subprocess, re, os, time, sys
+
+sys.modules["cryptography"] = None
 from pathlib import Path
 from sqlitedict import SqliteDict
 import typer
@@ -28,7 +30,12 @@ if CONFIGURED_PATH:
     os.chdir(CONFIGURED_PATH)
 
 if Path("vcim.db").exists():
-    db = SqliteDict("vcim.db", autocommit=True)
+    db = SqliteDict(
+        "vcim.db",
+        encode=json.dumps,
+        decode=json.loads,
+        autocommit=True,
+    )
     os.chdir(db["dir"])
 else:
     db = None
@@ -163,9 +170,11 @@ def init(
     global db
     if db == None:
         print("Создаю дб файл...", end=" ")
-        db = SqliteDict("vcim.db", autocommit=True)
+        db = SqliteDict(
+            "vcim.db", encode=json.dumps, decode=json.loads, autocommit=True
+        )
         print("✅")
-        db["dir"] = Path("").resolve()
+        db["dir"] = str(Path("").resolve())
         print("Создаю необходимые папки... ", end=" ")
         Path("instances").mkdir(mode=0o777, exist_ok=True)
         print("✅", end=" ")
@@ -468,7 +477,7 @@ def run(
         with open(f"instances/{name}/launcher.json", "r", encoding="utf-8") as file:
             data = json.load(file)
         oldpath = Path().resolve()
-        path = Path(f"instances/{name}").resolve()
+        path = str(Path(f"instances/{name}").resolve())
         if data["exec_file"] == "":
             print(":x: exec_file пуст. Нечего запускать")
             raise typer.Exit(2)

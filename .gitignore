@@ -1,6 +1,10 @@
 /res/
 /instances/
 /cache/
-
+/vcim.build/
+/vcim.dist/
+/vcim.onefile-build
+/.vscode
 *.db
 test.py
+vcim.bin
